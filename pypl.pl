@@ -29,6 +29,12 @@ sub replaceScalarsInLine{
 	return $line;
 }
 
+sub checkAssignment{
+	$ass = $_[0];
+	$ass =~ s/ ?(\w+) ?\/\/ ?(\w+) ?/ int\($1\/$2\) /g;	#replace python 'x//y' with 'int(x/y)'
+	return $ass;
+}
+
 sub translateStack{
 	my @lines = @_;
 	foreach my $line (@lines){
@@ -44,7 +50,8 @@ sub translateStack{
 			#print("found var $1\n");
 			#$type = determineVariableType($2);
 			push(@variables, $1);
-			push(@output, "\$$1 = $2\n");
+			my $ass = checkAssignment($2);
+			push(@output, "\$$1 = $ass;\n");
 		}
 		else {
 			if ($line =~ /[^\s]/){
