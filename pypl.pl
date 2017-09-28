@@ -28,7 +28,7 @@ sub replaceScalarsInLine{
 	foreach my $var (@variables){
 		#if ($line =~ /$var/){print("found $var in $line\n");}
 
-		$line =~ s/(^|[^\$])$var/\$$var/g;
+		$line =~ s/(^|[^\$])$var/$1\$$var/g;
 	}
 	return $line;
 }
@@ -43,29 +43,23 @@ sub evaluateExpression{
 	my $expr = $_[0];
 	#print("Evaluating Expression '$expr'". "\n");
 	if (!defined $expr){
-		#print("Returning Undef Expression '$expr'". "\n");
-		return $expr;
+		return "";
 	}
-	if ($expr =~ /[\"\+\-\*\/\%]/){
-		$expr =~ /([\"\+\-\*\/\%]{1,2})/;
+
+	if ($expr =~ /([\+\-\*\/\%]{1,2})/){
 		my $type = $1;
-		if ($type =~ /\"/){
-			#print("Found String '$expr'". "\n");
-			return $expr;
-		} elsif ($type =~ /[\+\-\*\/\%]/){
-			my $splitter = join("", "\\", join("\\", split(//,$type)));
-			#print ("Split Epression '$expr' by '$splitter\n");
-			my @lexicon = split(/$splitter/, "$expr", 2);
-			if (!defined $lexicon[1]){
-				#print("Found Expression '$lexicon[0]'$type in '$expr'". "\n");
-				return replaceScalarsInLine($lexicon[0]);
-			}
-			#print("Found Expression '$lexicon[0]'$type'$lexicon[1]' in '$expr'". "\n");
-			return join("", replaceScalarsInLine($lexicon[0]),$type,evaluateExpression($lexicon[1]));
-		} else {
-			#print("Found Unknown Expr $expr". "\n");
-			return replaceScalarsInLine($expr);
+		#print("Found num '$expr'". "\n");
+		my $splitter = join("", "\\", join("\\", split(//,$type)));
+		my @lexicon = split(/$splitter/, "$expr", 2);
+		if (!defined $lexicon[1]){
+			return evaluateCondition($lexicon[0]);
 		}
+		return join("", evaluateCondition($lexicon[0]),$type,evaluateCondition($lexicon[1]));
+	} elsif ($expr =~ /(<<|>>|&|~|\^|\|)/){
+		my $type = $1;
+		#print("Condition Type '$type'\n");
+		$expr =~ /(.*?)$type(.*)/;
+		return join("", evaluateCondition($1),$type,evaluateCondition($2));
 	} else {
 		#print("Found Terminating Expr $expr". "\n");
 		return replaceScalarsInLine($expr);
@@ -74,7 +68,30 @@ sub evaluateExpression{
 
 sub evaluateCondition{
 	my $condition = $_[0];
-	return $condition;
+	if (!defined $condition){
+		return "";
+	}
+	#print("Evaluating Condition '",$condition,"'\n");
+
+	if ($condition =~ /"/){
+		#print("Found String '$condition'". "\n");
+		my @lexicon = split(/"/, $condition, 3);
+		#print(join(" - ", @lexicon));
+		return join("", evaluateCondition($lexicon[0]),"\"",$lexicon[1],"\"",evaluateCondition($lexicon[2]));
+	} elsif ($condition =~ /[^\w](and|or|not)[^\w]/){
+		my $type = $1;
+		#print("Condition Type '$type'\n");
+		$condition =~ /(.*?)$type(.*)/;
+		return join("", evaluateCondition($1),$type, evaluateCondition($2));
+	} elsif ($condition =~ /(<|<=|>|>=|!=|==)/){
+		my $type = $1;
+		#print("Condition Type '$type'\n");
+		$condition =~ /(.*?)$type(.*)/;
+		return join("", evaluateCondition($1),$type, evaluateCondition($2));
+	} else {
+		#print("Condition is Expression\n");
+		return evaluateExpression($condition);		
+	}
 }
 
 sub generateWhiteSpace{
@@ -94,7 +111,7 @@ sub evaluateLine{
 	my $indent = generateWhiteSpace($indentLength);
 	$line =~ s/^[\s]*//;
 	$line =~ s/\n//;
-	print($line, "\n");
+	#print($line, "\n");
 
 	#determine if stack needs to be added to, or closed
 	#print(join(", ", @stack), "\n");
@@ -131,23 +148,23 @@ sub evaluateLine{
 	} elsif ($line =~ /^print/){
 		#print statement
 		$line =~ /print\(([^\)]*)\)/;
-		my $expr = evaluateExpression($1);
+		my $expr = evaluateCondition($1);
 		push(@output, $indent,"print($expr, \"\\n\");\n");
 	} elsif ($line =~ /^(\w+)[ ]*=[ ]*(.*)$/){
 		#assignment
 		#$type = determineVariableType($2);
 		push(@variables, $1);
-		my $ass = evaluateExpression($2);
+		my $ass = evaluateCondition($2);
 		$ass = checkAssignment($ass);
 		push(@output, $indent,"\$$1 = $ass;\n");
 	} elsif ($line =~ /^(if|while)/) {
 		$line =~ /(if|while)\s*([^:]*):\s*(.*)/;
-		print("Obtained from $1: condition '$2', and appendage '$3'\n");
+		#print("Obtained from $1: condition '$2', and appendage '$3'\n");
 		my $condition = evaluateCondition($2);
 		push(@output, $indent,"$1($condition){\n");
 		my $statements = $3;
 		if (defined $statements and $statements =~ /[^\s]/){
-			print("Moving '$statements' to new line\n");
+			#print("Moving '$statements' to new line\n");
 			evaluateLine(join("", $indent, "   ", $statements));
 		}
 	} else {
