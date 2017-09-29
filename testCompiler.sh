@@ -1,7 +1,15 @@
 #!/bin/sh
 
-python $1 > pyOut
+for file in $@
+do
+	python $file > pyOut
 
-./pypl.pl $1 | perl > plOut
+	./pypl.pl $file | perl > plOut
 
-diff pyOut plOut
+	if diff pyOut plOut 
+	then
+		echo $file was successful
+	else
+		echo $file had some errors
+	fi
+done
