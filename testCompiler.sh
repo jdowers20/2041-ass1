@@ -2,8 +2,10 @@
 
 for file in $@
 do
+	echo "python test for $file"
 	python $file > pyOut
 
+	echo "perl test for $file"
 	./pypl.pl $file | perl > plOut
 
 	if diff pyOut plOut 

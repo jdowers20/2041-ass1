@@ -1,4 +1,41 @@
+sub dictExists{
+	my $name = $_[0];
+	#print("Looking for scalar '$name'\n");
+	for my $var (@dictVars){
+		if ($var eq $name){
+			#print("'$name' found\n");
+			return 1;
+		}
+	}
+	#print("'$name' not found\n");
+	return 0;
+}
 
+sub listExists{
+	my $name = $_[0];
+	#print("Looking for scalar '$name'\n");
+	for my $var (@listVars){
+		if ($var eq $name){
+			#print("'$name' found\n");
+			return 1;
+		}
+	}
+	#print("'$name' not found\n");
+	return 0;
+}
+
+sub scalarExists{
+	my $name = $_[0];
+	#print("Looking for scalar '$name'\n");
+	for my $var (@scalarVars){
+		if ($var eq $name){
+			#print("'$name' found\n");
+			return 1;
+		}
+	}
+	#print("'$name' not found\n");
+	return 0;
+}
 
 sub checkAssignment{
 	my $ass = $_[0];

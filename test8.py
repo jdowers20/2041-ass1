@@ -11,5 +11,5 @@ for line in sys.stdin:
     
 i = len(lines) - 1
 while i >= 0:
-    print(lines[i])
+    print(lines.pop())
     i = i - 1
