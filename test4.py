@@ -1,7 +1,7 @@
 #!/usr/bin/python3.6
 
 i = 0
-while (i < 4): print(i); i = i + 1
+while (i < 4): print(i);i = i + 1
 
 while(i < 6):
 	i = i + 1

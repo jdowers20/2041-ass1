@@ -2,4 +2,4 @@
 
 print("hello world")
 
-print("second print")
+print("second print", "third print", end="\n")

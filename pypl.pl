@@ -28,7 +28,12 @@ sub isFunct{
 		}
 	}
 	if ($name =~ /(.*?)\.(append|pop)/ and varExists($1) eq "\@"){
-		#print ("append '$name'\n");
+		return 1;
+	}
+	if ($name =~ /(.*?)\.(keys)/ and varExists($1) eq "\%"){
+		return 1;
+	}
+	if ($name =~ /(.*?)\.(join|split)/){
 		return 1;
 	}
 	return 0;
@@ -45,7 +50,7 @@ sub determineVariableType{
 		}
 		return "\$";
 	}
-	if ($ass =~ /^sort/){
+	if ($ass =~ /^(sort|split)/){
 		if ($addToLists == 1){
 			push(@listVars, $name);
 		}
@@ -108,6 +113,11 @@ sub transformVar{
 
 sub transformList{
 	my $var = $_[0];
+
+	if ($var =~ /sys.argv/){
+		$var = "ARGV";
+	}
+
 	return "\@$var";
 }
 
@@ -118,7 +128,30 @@ sub transformScalar{
 	} elsif($var =~ /(.*?)\[(.*?)\]/) {
 		my $name = $1;
 		my $par = evaluateExpressionLR($2);
-		return "\$$name\[$par\]";
+		if (determineVariableType($name, "", 0) eq "\%"){
+			return "\$$name\{$par\}";
+		} else{
+			if ($name eq "sys.argv"){
+				$name = "ARGV";
+				$par = "$par -1";
+				if ($par =~ /:/){
+					$par =~ s/:/ -1:/;
+				}
+			}
+			if ($par =~ /(.*?):(.*)/){
+				my $first = $1;
+				my $second = $2;
+				if ($first =~ /^\s*( -1|)$/){
+					$first =~ s/\s*( -1|)/0$1/;
+				}
+				if ($second =~ /^\s*( -1)?$/){
+					$second =~ s/^\s*( -1)?$/\$#$name/;
+				}
+				push(@output, $indent, "\@tmpList = \@$name\[($first..$second)\];\n");
+				return "\@tmpList";
+			}				
+			return "\$$name\[$par\]";
+		}
 	} else {
 		return "\$$var";
 	}
@@ -131,17 +164,21 @@ sub transformFunctions{
 		if ($func =~ /^print\s*\(\s*\)/){
 			return "print(\"\\n\")";
 		}
-		my $end = "\\n";
-		if ($func =~ /,\s*end='(.*?)'/){
-			$func =~ s/,\s*end=\s*'(.*?)'//;
-			$end = $1;
+		my $end = "\"\\n\"";
+		if ($func =~ /,\s*end\s*=\s*(.*?)\)/){
+			$func =~ s/,\s*end\s*=\s*(.*?)\)//;
+			$end = evaluateExpressionLR($1);
 		}
 		$func =~ s/\)\s*$//;
-		$func = join("", $func, ", \"$end\")");
+		$func = join("", $func, ", $end)");
 		return $func;
 	} elsif($func =~ /^range/) {
-		$func =~ /range\((.*?)\)/;
-		my @args = split(/,/, $1, 2);
+		$func =~ /range\((.*)/;
+		my $pars =  $1;
+		$pars =~ s/\)\s*$//;
+		#print("Range pars '$pars'\n");
+		my @args = split(/,/, $pars, 2);
+		#print("Args '",join(":", @args), "'\n");
 		if (defined $args[1]){
 			my $upper = join("",$args[1],"-1");
 			return "($args[0]..$upper)";
@@ -152,16 +189,31 @@ sub transformFunctions{
 	} elsif($func =~ /^sys\.stdout\.write/) {
 		$func =~ s/sys\.stdout\.write/print/;
 		return $func;
-	} elsif($func =~ /^sorted\s*\((.*?)\)/) {
-		my $par = evaluateExpressionLR($1);
+	} elsif($func =~ /^sorted\s*\((.*)/) {
+		my $par = $1;
+		$par =~ s/\)\s*$//;
+		$par = evaluateExpressionLR($par);
 		return "sort($par)";
-	} elsif($func =~ /^sys\.stdin\.readline/) {
+	} elsif($func =~ /^sys\.stdin\.readline\(/) {
 		$func =~ s/sys\.stdin\.readline\(.*?\)/<STDIN>/;
 		return $func;
-	} elsif($func =~ /(.*?)\.append\((.*?)\)/){
+	} elsif($func =~ /^sys\.stdin\.readlines/) {
+		push(@output, "$indent","while(\$tmpLineReader = <STDIN>){\n");
+		push(@output, "$indent","   chomp(\$tmpLineReader);\n");
+		push(@output, "$indent","   push(\@tmpLines, \$tmpLineReader);\n");
+		push(@output, "$indent","}\n");
+		$func = "\@tmpLines";
+		return $func;
+	} elsif($func =~ /(.*?)\.append\((.*)/){
 		my $list = $1;
-		my $app = evaluateExpressionLR($2);
+		my $app = $2;
+		$app =~s/\)\s*$//;
+		$app = evaluateExpressionLR($app);
 		return "push(\@$list, $app)"
+	} elsif($func =~ /(.*?)\.keys\(\)/){
+		my $dict = $1;
+		#print("Dict '$dict'\n");
+		return "keys($dict)";
 	} elsif($func =~ /(.*?)\.pop\((.*?)\)/){
 		my $list = $1;
 		my $index = $2;
@@ -171,42 +223,44 @@ sub transformFunctions{
 			$index = evaluateExpressionLR($index);
 		}
 		return "splice(\@$list, $index)"
-	} elsif($func =~ /len\((.*?)\)/){
-		my $par = evaluateExpressionLR($1);
+	} elsif($func =~ /len\((.*)/){
+		my $par = $1;
+		$par =~ s/\)\s*$//;
+		$par = evaluateExpressionLR($par);
 		if ($par =~ /\@(.*)?/){
+			if ($1 eq "ARGV"){
+				$par = "$par +1";
+			}
 			return "scalar $par";
 		} else {
 			return "length($par)";
 		}
+	} elsif($func =~ /(.*?)\.split\((.*?)/){
+		my $prefix = $1;
+		my $par = $2;
+		$par =~ s/\)\s*$//;
+		if ($par =~ /["'](.*?)["']/){
+			return join("", "split(/$1/, ",evaluateExpressionLR($prefix),")");
+		} else{
+			return join("", "split(/ /, ",evaluateExpressionLR($prefix),")");
+		}
+	} elsif($func =~ /(.*?)\.join\((.*)/){
+		my $prefix = $1;
+		my $par = $2;
+		$par =~ s/\)\s*$//;
+		return join("", "join($prefix, ",evaluateExpressionLR($par),")");
 	}
 	return $func;
-}
-
-sub evaluateArguments{
-	my $args = $_[0];
-	#print("Args '$args'\n");
-	$args =~ s/^\s*\(//;
-	$args =~ s/\)\s*$//;
-	#print("trimmed '$args'\n");
-	my @argsList = split(/,/, $args);
-	my $concat = "";
-	foreach my $arg (@argsList) {
-		if ($concat eq "") {
-			$concat = evaluateExpressionLR($arg);
-		} else {
-			$concat = join(",", $concat, evaluateExpressionLR($arg));
-		}
-	}
-	return "($concat)";
 }
 
 sub retrieveFunction{
 	my $input = $_[0];
 	#print("Getting function in '$input'\n");
-	$input =~ /^([\w0-9\.]+)(\s*)\((.*)/;
+	$input =~ /^((["'].*?["'])?[\w0-9\.]+)(\s*)\((.*)/;
 	my $func = $1;
-	my $space = $2;
-	my $rem = $3;
+	my $space = $3;
+	my $rem = $4;
+	#print("Found func '$func', space '$space', rem '$rem' \n");
 	my @chars = split(//, $rem);
 	#print("Chars '@chars'\n");
 
@@ -239,19 +293,29 @@ sub evaluateExpressionLR{
 	}
 	#print("Found Expression'$expr'\n");
 
-	if ($expr =~ /^"/){
-		$expr =~ /^("[^"]*")(\s*%\s*\(.*?\))?(.*)/;
+	if ($expr =~ /^["']/){
+		$expr =~ /^("[^"]*"|'[^']*')(\s*%\s*\(.*?\))?(.*)/;
 		my $str = $1;
 		my $format = $2;
-		my $rem = evaluateExpressionLR($3);
+		my $rem = $3;
 		#print("String '$str', '$format', rem '$rem'\n");
 		if (defined $format and $format ne ""){
 			$format =~ s/\s*%\s*\(/\(/;
 			$format = evaluateExpressionLR($format);
 			return join("", "sprintf($str, $format)", $rem)
 		} else {
-			return join("", $str, $rem);
+			if($rem =~ /\.(split|join)/){
+				my @pack = retrieveFunction($expr);
+				my $funct = transformFunctions(shift(@pack));
+				return join("", "$funct",evaluateExpressionLR(join("",@pack)));
+			}
+			return join("", $str, evaluateExpressionLR($rem));
 		}
+	} elsif ($expr =~ /^r"/){
+		$expr =~ /^r("[^"]*")(.*)/;
+		my $str = $1;
+		my $rem = evaluateExpressionLR($2);
+		return join("", $str, $rem);
 	} elsif	($expr =~ /^(\(|\))/){
 		$expr =~ /^(\(|\))(.*)/;
 		if ($1 eq "("){return join("", "(", evaluateExpressionLR($2));}
@@ -273,6 +337,7 @@ sub evaluateExpressionLR{
 			#print("Var is '$word'\n");
 			return join("", "$word",evaluateExpressionLR($rem));
 		} elsif(isFunct($word) == 1){
+			#print("Found function\n");
 			my @pack = retrieveFunction($expr);
 			my $funct = transformFunctions(shift(@pack));
 			return join("", "$funct",evaluateExpressionLR(join("",@pack)));
@@ -296,6 +361,13 @@ sub evaluateExpressionLR{
 		return join("", $oper, evaluateExpressionLR($1));
 	} elsif	($expr =~ /^(<<|>>|&|~)/){
 		my $bitw = $1;
+		if ($bitw eq "~"){
+			$expr =~ /^~([0-9\w\.\[\]]+)(.*)/;
+			my $var = $1;
+			my $rem = $2;
+			#print("~ '$var', '$rem'\n");
+			return join("", "-",evaluateExpressionLR($var),"-1",evaluateExpressionLR($rem));
+		}
 		$expr =~ /^$bitw(.*)/;
 		return join("", $bitw, evaluateExpressionLR($1));
 	} elsif	($expr =~  /(\^|\|)/){
@@ -335,7 +407,7 @@ sub generateWhiteSpace{
 sub evaluateLine{
 	my $line = $_[0];
 	my $indentLength = getLineWhiteSpaces($line);
-	my $indent = generateWhiteSpace($indentLength);
+	$indent = generateWhiteSpace($indentLength);
 	$line =~ s/^[\s]*//;
 	$line =~ s/\n//;
 	#print($line, "\n");
@@ -384,8 +456,8 @@ sub evaluateLine{
 		my $var = $1; 
 		my $ass = evaluateExpressionLR($2);
 		my $type = determineVariableType($var, $ass, 1);
+		if ($ass eq "\{\}"){return;}
 		#print("Variable '$var' is type '$type'\n");
-		push(@scalarVars, $var);
 		push(@output, $indent,"$type$var = $ass;\n");
 	} elsif ($line =~ /^(if|while|elif)/) {
 		$line =~ /(if|while|elif)\s*([^:]*):\s*(.*)/;
@@ -403,7 +475,7 @@ sub evaluateLine{
 	} elsif ($line =~ /^else/) {
 		push(@output, $indent,"else {\n");
 	} elsif ($line =~ /^for/) {
-		$line =~ /^for ([\w0-9]+) in (.*?):\s*(.*)/;
+		$line =~ /^for ([\w0-9]+) in (.*):\s*([^\[\]]*(\[.*)?)/;
 		my $var = $1;
 		my $set = $2;
 		my $statements = $3;
@@ -422,6 +494,8 @@ sub evaluateLine{
 		$line = evaluateExpressionLR($line);
 		if ($line =~ /[^\s]/){
 			push(@output, $indent,"$line;\n");
+		} else {
+			push(@output, "\n");
 		}
 	}
 	#print ($line, "\n");
@@ -435,7 +509,7 @@ sub evaluateLine{
 @dictVars = ();
 @output = ();
 @stack = ();		# a record of the levels of indentation on the stack
-@knownFuncts = ("print", "range", "len", "int", "sorted", "sys.stdout.write", "sys.stdin.readline");
+@knownFuncts = ("print", "range", "len", "int", "sorted", "sys.stdout.write", "sys.stdin.readline","sys.stdin.readlines");
 
 if (defined $ARGV[0]){
 	open($FILE, '<', $ARGV[0]);

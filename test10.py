@@ -8,5 +8,5 @@ print(b)
 
 c = "%d %s %.1f" % (1, "more", 3.45)
 print(c)
-print("test", "one", "two", end='x\n')
+print("test", "one", "two", end="x\n")
 print("%d %s %4.2f" % (1000, "x", 94.321))

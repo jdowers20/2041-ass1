@@ -1,3 +1,23 @@
+
+
+sub evaluateArguments{
+	my $args = $_[0];
+	#print("Args '$args'\n");
+	$args =~ s/^\s*\(//;
+	$args =~ s/\)\s*$//;
+	#print("trimmed '$args'\n");
+	my @argsList = split(/,/, $args);
+	my $concat = "";
+	foreach my $arg (@argsList) {
+		if ($concat eq "") {
+			$concat = evaluateExpressionLR($arg);
+		} else {
+			$concat = join(",", $concat, evaluateExpressionLR($arg));
+		}
+	}
+	return "($concat)";
+}
+
 sub dictExists{
 	my $name = $_[0];
 	#print("Looking for scalar '$name'\n");
