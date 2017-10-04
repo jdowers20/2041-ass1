@@ -562,10 +562,11 @@ sub evaluateExpressionLR{
 		#This is only for intialising variables, as brackets for array indexes are caught above as a variable
 		$expr =~ /^([\[\]])(.*)/;
 		my $bracket = $1;
+		my $rem = $2;
 		$bracket =~ s/\[/\(/;
 		$bracket =~ s/\]/\)/;
 
-		return join("", $bracket, evaluateExpressionLR($2));
+		return join("", $bracket, evaluateExpressionLR($rem));
 
 	} elsif	($expr =~ /^\s/){
 		#whitespace: Collect whitespace and print it

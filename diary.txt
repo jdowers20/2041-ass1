@@ -1,0 +1,33 @@
+Date:   Wed Oct 4 21:33:00 2017 +1100
+Started at 2:45pm
+
+    Added some items from subset 5 such as regex, open and functions. Added over 100 lines of cmoments, finalized
+
+Date:   Wed Oct 4 00:14:10 2017 +1100
+Started at 4pm
+
+    Major commit for 3/10/17, Started working through elements of subset 5. Acheived about half of them to a relatively high degree of accuracy, also finished implementing dicts, as well as several functions such as keys, split, join, sys.stdin.readlines, as well as sys.argv and : in arrays
+
+Date:   Tue Oct 3 00:23:47 2017 +1100
+Started at 6:30pm
+
+    Added sorted function, as well as elseif statements. Added in string formatting with %, got the program to work with all the given autotests
+
+Date:   Fri Sep 29 23:57:42 2017 +1000
+Started at 4pm
+
+    Major commit for Friday 29th Sep, worked on more of subsets 3 and 4. Made large progress to both subsets, the former is now complete. Completeoverhaul of the expression analysis, now reading from left to right
+
+Date:   Thu Sep 28 22:17:58 2017 +1000
+Started at 5:15pm
+
+    Test files
+
+    Massive changes to the condition and expression evaluators, especially regarding strings
+
+    Large changes, most of subset 2 working, added in whiles and ifs (both single and mutli lined) Also got semi-colons working to split lines
+
+Date:   Tue Sep 26 22:15:35 2017 +1000
+Started at 4:15pm
+
+    Began work on the project, made significant progress, have a working function to parse each line depending on indentation, as well as functions to convert print statements and assignments, as well as all instances of scalar variables
